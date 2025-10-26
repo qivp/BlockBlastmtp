@@ -1,154 +1,125 @@
 <!DOCTYPE html>
-<html lang="en-us">
-  <head>
-	<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5221630201042895"
-     crossorigin="anonymous"></script>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BlockBlast P2P Multiplayer</title>
+<style>
+  body { margin:0; font-family: sans-serif; background:#111; color:#fff; text-align:center; }
+  canvas { background:#222; display:block; margin:20px auto; }
+  #ui { margin: 10px auto; }
+  input, button { padding: 5px; margin: 5px; }
+</style>
+<script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+</head>
+<body>
 
-	<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-CC4ZKKC8EF"></script>
+<h1>BlockBlast P2P Multiplayer</h1>
+<div id="ui">
+  <button id="hostBtn">Host Game</button>
+  <input type="text" id="friendCode" placeholder="Friend Code">
+  <button id="joinBtn">Join Game</button>
+  <p id="status"></p>
+  <p>Your Code: <span id="myCode">-</span></p>
+</div>
+
+<canvas id="gameCanvas" width="500" height="500"></canvas>
+
 <script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
 
-  gtag('config', 'G-CC4ZKKC8EF');
+// Simple game state
+let player = { x: 250, y: 250, color: 'blue' };
+let otherPlayers = {};
+let blocks = [];
 
-  let displayMode = 'browser';
-  let isPwa = false;
-  const mqStandAlone = '(display-mode: fullscreen)';
-  if (navigator.standalone || window.matchMedia(mqStandAlone).matches) {
-    displayMode = 'fullscreen';
-    isPwa = true
+// Draw loop
+function draw() {
+  ctx.fillStyle = '#222';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // Draw player
+  ctx.fillStyle = player.color;
+  ctx.fillRect(player.x-10, player.y-10, 20, 20);
+
+  // Draw other players
+  for (let id in otherPlayers) {
+    const p = otherPlayers[id];
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x-10, p.y-10, 20, 20);
   }
-  gtag('event', 'pwa_check', {'pwa': isPwa});
 
-//<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  requestAnimationFrame(draw);
+}
+draw();
+
+// PeerJS setup
+let peer = null;
+let connections = [];
+
+function initPeer(isHost) {
+  peer = new Peer(undefined, { host:'0.peerjs.com', secure:true, port:443 });
+  
+  peer.on('open', id => {
+    document.getElementById('myCode').innerText = id;
+    console.log('My Peer ID:', id);
+    document.getElementById('status').innerText = isHost ? 'Hosting...' : 'Connected';
+  });
+
+  // Incoming connections
+  peer.on('connection', conn => {
+    connections.push(conn);
+    conn.on('data', handleData);
+    console.log('Friend connected:', conn.peer);
+  });
+}
+
+// Send game state to all peers
+function broadcast(data) {
+  connections.forEach(conn => conn.send(data));
+}
+
+// Handle incoming data
+function handleData(data) {
+  if (data.type === 'move') {
+    if (!otherPlayers[data.id]) otherPlayers[data.id] = { x:0, y:0, color:'red' };
+    otherPlayers[data.id].x = data.x;
+    otherPlayers[data.id].y = data.y;
+  } else if (data.type === 'blast') {
+    console.log('Block blasted by', data.id, 'block', data.blockId);
+    // Implement block destruction here
+  }
+}
+
+// Keyboard movement
+document.addEventListener('keydown', e => {
+  if(e.key==='ArrowUp') player.y -= 5;
+  if(e.key==='ArrowDown') player.y +=5;
+  if(e.key==='ArrowLeft') player.x -=5;
+  if(e.key==='ArrowRight') player.x +=5;
+
+  // Broadcast position
+  broadcast({ type:'move', x:player.x, y:player.y, id:peer.id });
+});
+
+// UI buttons
+document.getElementById('hostBtn').addEventListener('click', () => {
+  initPeer(true);
+});
+
+document.getElementById('joinBtn').addEventListener('click', () => {
+  initPeer(false);
+  const friendId = document.getElementById('friendCode').value;
+  if (!friendId) return alert('Enter friend code!');
+  const conn = peer.connect(friendId);
+  conn.on('open', () => {
+    connections.push(conn);
+    conn.on('data', handleData);
+    console.log('Connected to host!');
+  });
+});
+
 </script>
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">  
-    <title>Block Blast Puzzle</title>
-    <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css">
-    <link rel="manifest" href="manifest.webmanifest">
-  </head>
-  <body>
-    <div id="unity-container">
-      <canvas id="unity-canvas" width=1080 height=1920 tabindex="-1"></canvas>
-      <div id="unity-loading-bar">
-        <div id="unity-logo"></div>
-        <div id="unity-progress-bar-empty">
-          <div id="unity-progress-bar-full"></div>
-        </div>
-      </div>
-      <div id="unity-warning"> </div>
-    </div>
-
-    <script>
-      window.addEventListener("load", function () {
-        if ("serviceWorker" in navigator) {
-          navigator.serviceWorker.register("ServiceWorker.js");
-        }
-      });
-
-	//  window.addEventListener("orientationchange", function () {
-	// 	var orientation = window.orientation;
-
-	// 	if (orientation === 90 || orientation === -90) 
-	// 	{
-	// 		alert("Landscape orientation is not supported");
-
-	// 		setTimeout(function () {
-	// 			window.screen.orientation.lock("portrait-primary");
-	// 		}, 100);
-	// 	}
-	// });
-
-      var container = document.querySelector("#unity-container");
-      var canvas = document.querySelector("#unity-canvas");
-      var loadingBar = document.querySelector("#unity-loading-bar");
-      var progressBarFull = document.querySelector("#unity-progress-bar-full");
-      var warningBanner = document.querySelector("#unity-warning");
-
-      // Shows a temporary message banner/ribbon for a few seconds, or
-      // a permanent error message on top of the canvas if type=='error'.
-      // If type=='warning', a yellow highlight color is used.
-      // Modify or remove this function to customize the visually presented
-      // way that non-critical warnings and error messages are presented to the
-      // user.
-      function unityShowBanner(msg, type) {
-        function updateBannerVisibility() {
-          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
-        }
-        var div = document.createElement('div');
-        div.innerHTML = msg;
-        warningBanner.appendChild(div);
-        if (type == 'error') div.style = 'background: red; padding: 10px;';
-        else {
-          if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
-          setTimeout(function() {
-            warningBanner.removeChild(div);
-            updateBannerVisibility();
-          }, 5000);
-        }
-        updateBannerVisibility();
-      }
-	 
-      var buildUrl = "Build";
-      var loaderUrl = buildUrl + "/BlockBlast1.1-8.loader.js";
-      var config = {
-        dataUrl: buildUrl + "/BlockBlast1.1-8.data.unityweb",
-        frameworkUrl: buildUrl + "/BlockBlast1.1-8.framework.js.unityweb",
-        codeUrl: buildUrl + "/BlockBlast1.1-8.wasm.unityweb",
-        streamingAssetsUrl: "StreamingAssets",
-        companyName: "reun",
-        productName: "Block Blast Puzzle",
-        productVersion: "1.1",
-        showBanner: unityShowBanner,
-      };
-
-      // By default Unity keeps WebGL canvas render target size matched with
-      // the DOM size of the canvas element (scaled by window.devicePixelRatio)
-      // Set this to false if you want to decouple this synchronization from
-      // happening inside the engine, and you would instead like to size up
-      // the canvas DOM size and WebGL render target sizes yourself.
-      // config.matchWebGLToCanvasSize = false;
-
-      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-        // Mobile device style: fill the whole browser client area with the game canvas:
-        var meta = document.createElement('meta');
-        meta.name = 'viewport';
-        meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
-        document.getElementsByTagName('head')[0].appendChild(meta);
-      }
-
-      loadingBar.style.display = "block";
-
-      var script = document.createElement("script");
-      script.src = loaderUrl;
-      script.onload = () => {
-        createUnityInstance(canvas, config, (progress) => {
-          progressBarFull.style.width = 100 * progress + "%";
-        }).then((unityInstance) => {
-          loadingBar.style.display = "none";
-        }).catch((message) => {
-          alert(message);
-        });
-      };
-      document.body.appendChild(script);
-    </script>
-
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5221630201042895"
-crossorigin="anonymous"></script>
-<!-- Banner test -->
-<ins class="adsbygoogle"
-style="display:block"
-data-ad-client="ca-pub-5221630201042895"
-data-ad-slot="3988294629"
-data-ad-format="auto"
-data-full-width-responsive="true"></ins>
-<script>
-(adsbygoogle = window.adsbygoogle || []).push({});
-</script>
-
-  </body>
+</body>
 </html>
